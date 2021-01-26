@@ -1,9 +1,0 @@
-name: bowtie
-channels:
-  - bioinfo
-  - bioconda/label/cf201901
-  - conda-forge
-dependencies:
-  - bowtie2
-  - samtools
-  - bowtie-py
