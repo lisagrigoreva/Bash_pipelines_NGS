@@ -1,0 +1,141 @@
+##Guar SNP calling
+
+mkdir fastq  key  output  referenceGenome
+##Create DB
+~~~bash
+#/bin/bash
+ml tassel
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -GBSSeqToTagDBPlugin \
+   -e HindIII \
+   -i ${cwd} \
+   -db ${db} \
+   -k ${barcodes}  \
+   -kmerLength 85 \
+   -minKmerL 30 \
+   -mnQS 33 \
+   -mxKmerNum 1000000000 \
+   -endPlugin \
+   -runfork1
+~~~
+##Tagexport
+
+~~~bash
+#/bin/bash
+ml tassel
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -TagExportToFastqPlugin \
+ -db ${db} \
+ -o ${cwd}/tagsForAlign.fa.gz \
+ -c 5 \
+ -endPlugin \
+ -runfork1
+~~~
+ 
+ 
+##Alignment
+
+~~~bash
+bowtie2
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+btindex="/ref/scaffolds.fa"
+bowtie2 -p 15 --very-sensitive -x ${btindex} -U ${cwd}/tagsForAlign.fa.gz -S tagsForAlignFullvs.sam
+SAM="tagsForAlignFullvs.sam"
+samtools view --threads 16 -b -o ${SAM%.*}.bam ${SAM}
+samtools sort -o ${SAM%.*}_sorted.bam -T ${SAM%.*}_temp --threads 36 ${SAM%.*}.bam
+~~~
+
+#SamtoGBS
+~~~bash
+#/bin/bash
+ml tassel
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -SAMToGBSdbPlugin \
+  -i ${cwd}/tagsForAlignFullvs.sam \
+  -db ${db} \
+  -aProp 0.0 \
+  -aLen 0 \
+  -endPlugin \
+  -runfork1
+~~~
+##Discovery SNP
+~~~bash
+#/bin/bash
+ml tassel
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -DiscoverySNPCallerPluginV2 \
+  -db ${db} \
+  -sC 0 \
+  -eC 0 \
+  -mnLCov 0.1 \
+  -mnMAF 0.01 \
+  -deleteOldData true \
+  -endPlugin \
+  -runfork1
+~~~
+
+    
+##Production SNP caller
+
+~~~bash
+#!/bin/bash
+ml tassel
+cwd=$(pwd)
+barcodes=${cwd}/barcode-for-tassel.tsv
+db=${cwd}/GBSV2.db
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -ProductionSNPCallerPluginV2 \
+  -db ${db} \
+  -e HindIII \
+  -i ${cwd} \
+  -k ${barcodes} \
+  -kmerLength 33 \
+  -o ${cwd}/tassel-gbs.vcf \
+  -endPlugin \
+  -runfork1
+
+
+#Or h5 format
+run_pipeline.pl -Xms100G -Xmx180G -fork1 -ProductionSNPCallerPluginV2 \
+  -db ${db} \
+  -e ApeKI \
+  -i ${cwd} \
+  -k ${barcodes} \
+  -kmerLength 33 \
+  -o ${cwd}/tassel-gbs.h5 \
+  -endPlugin \
+  -runfork1
+  ~~~
+  
+  
+  -----
+  
+  
+  beryl cummings science trqnslational mesicine. 
+  
+  Filtering hight coverage regions, Binomial distribution for SNPs, remove hight complexety regions 
+
+SNP caller - e  (GATK); move treshold to 95% 
+
+1. Intersect annotated file with repetative regions; annotate assembly 
+2. If read can mapped for different redions throught it away; count reads that can will be removed
+3. Pseudo SNP
+4. Change bowtie to bwa (check how bowtie2 mapped it)
+5. RAD-seq for what? (Uneak regions!)
+6. RAW RAD seq + raw assembly reads and take reads with restrivtion cites, check coverage (jellyfish,
+
+7. Plotanus (new data) +  Masurca + nanopolish 
+8. Increase treshold in bowtie 
+9. Filter our all repeats (repeatmasker, repeatmodeller=good assembly)
+10. STAR mapper (aligment) 
+11. Window masker
+12. Real heterozugosity VS Illumina errors !
